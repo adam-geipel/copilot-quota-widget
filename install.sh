@@ -151,17 +151,36 @@ else
   warn "  or download from: https://github.com/swiftbar/SwiftBar/releases/latest"
 fi
 
-# ── detect SwiftBar plugins directory ─────────────────────────────────────────
-SWIFTBAR_PLUGINS=""
-SWIFTBAR_PLIST="$HOME/Library/Preferences/com.ameba.SwiftBar.plist"
-if [[ -f "$SWIFTBAR_PLIST" ]]; then
-  SWIFTBAR_PLUGINS=$(defaults read com.ameba.SwiftBar PluginsDirectory 2>/dev/null || true)
-fi
+# ── configure SwiftBar plugins directory ─────────────────────────────────────
+# Read existing pref first — may already be set if SwiftBar was previously used
+SWIFTBAR_PLUGINS=$(defaults read com.ameba.SwiftBar PluginsDirectory 2>/dev/null || true)
+
 if [[ -z "$SWIFTBAR_PLUGINS" ]]; then
-  SWIFTBAR_PLUGINS="$HOME/Library/Application Support/SwiftBar/Plugins"
+  DEFAULT_PLUGINS="$HOME/.swiftbar/plugins"
+  echo ""
+  echo "  SwiftBar needs a plugins folder. Choose:"
+  echo "    1) $DEFAULT_PLUGINS  (recommended)"
+  echo "    2) Enter a custom path"
+  echo ""
+  read -r -p "  Choice [1]: " plugins_choice
+  plugins_choice="${plugins_choice:-1}"
+
+  if [[ "$plugins_choice" == "2" ]]; then
+    read -r -p "  Enter full path: " custom_path
+    # Expand ~ manually since read won't do it
+    SWIFTBAR_PLUGINS="${custom_path/#\~/$HOME}"
+  else
+    SWIFTBAR_PLUGINS="$DEFAULT_PLUGINS"
+  fi
+
+  # Write pref before launching SwiftBar so it never shows the GUI dialog
+  defaults write com.ameba.SwiftBar PluginsDirectory "$SWIFTBAR_PLUGINS"
+  info "SwiftBar plugins dir set: $SWIFTBAR_PLUGINS"
+else
+  info "SwiftBar plugins dir (existing): $SWIFTBAR_PLUGINS"
 fi
+
 mkdir -p "$SWIFTBAR_PLUGINS"
-info "SwiftBar plugins dir: $SWIFTBAR_PLUGINS"
 
 # ── download / update widget files ───────────────────────────────────────────
 section "3 / 5  Installing widget files → $WIDGET_DIR"
