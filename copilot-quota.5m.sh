@@ -30,53 +30,8 @@ CONFIG_FILE="$WIDGET_DIR/config.json"
 FETCH_SCRIPT="$WIDGET_DIR/fetch_quota.sh"
 
 # ── actions passed as positional args from SwiftBar menu clicks ($1) ──────────
-UBERSICHT_WIDGETS="$HOME/Library/Application Support/Übersicht/Widgets"
-UBERSICHT_WIDGET_LINK="$UBERSICHT_WIDGETS/copilot-quota.widget"
-UBERSICHT_WIDGET_SRC="$WIDGET_DIR/ubersicht/copilot-quota.widget"
-
 if [[ "${1:-}" == "refresh" ]]; then
   bash "$FETCH_SCRIPT"
-  exit 0
-fi
-
-if [[ "${1:-}" == "toggle_overlay" ]]; then
-  # Flip overlay_enabled in config.json
-  NEW_STATE=$(python3 - <<PYEOF
-import json, os
-cfg_path = "$CONFIG_FILE"
-try:
-    cfg = json.load(open(cfg_path))
-except Exception:
-    cfg = {}
-enabled = not cfg.get("overlay_enabled", False)
-cfg["overlay_enabled"] = enabled
-json.dump(cfg, open(cfg_path, "w"), indent=2)
-print("true" if enabled else "false")
-PYEOF
-)
-
-  if [[ "$NEW_STATE" == "true" ]]; then
-    # Enable: ensure symlink exists, launch Übersicht if not running
-    mkdir -p "$UBERSICHT_WIDGETS"
-    if [[ ! -L "$UBERSICHT_WIDGET_LINK" ]]; then
-      ln -sf "$UBERSICHT_WIDGET_SRC" "$UBERSICHT_WIDGET_LINK"
-    fi
-    UBERSICHT_APP=$(find /Applications "$HOME/Applications" -maxdepth 1 -name "Übersicht.app" 2>/dev/null | head -1)
-    if [[ -n "$UBERSICHT_APP" ]]; then
-      if ! pgrep -x "Übersicht" &>/dev/null; then
-        open "$UBERSICHT_APP"
-      else
-        # Already running — tell it to reload the widget
-        osascript -e 'tell application "Übersicht" to reload widget id "copilot-quota-widget-index-jsx"' 2>/dev/null || true
-      fi
-    fi
-  else
-    # Disable: remove symlink, quit Übersicht
-    rm -f "$UBERSICHT_WIDGET_LINK"
-    if pgrep -x "Übersicht" &>/dev/null; then
-      osascript -e 'tell application "Übersicht" to quit' 2>/dev/null || true
-    fi
-  fi
   exit 0
 fi
 
@@ -85,7 +40,15 @@ if [[ "${1:-}" == "open_settings" ]]; then
   exit 0
 fi
 
-# ── trigger background refresh (non-blocking) ─────────────────────────────────
+# ── ensure Python venv with Pillow exists ─────────────────────────────────────
+VENV_DIR="$WIDGET_DIR/.venv"
+VENV_PYTHON="$VENV_DIR/bin/python3"
+if [[ ! -x "$VENV_PYTHON" ]]; then
+  python3 -m venv "$VENV_DIR" --system-site-packages
+fi
+if ! "$VENV_PYTHON" -c "from PIL import Image" &>/dev/null; then
+  "$VENV_PYTHON" -m pip install --quiet pillow --disable-pip-version-check
+fi
 bash "$FETCH_SCRIPT" &>/dev/null &
 
 # ── read cached data ──────────────────────────────────────────────────────────
@@ -109,19 +72,14 @@ if [[ ! -f "$QUOTA_FILE" ]]; then
 fi
 
 # ── parse quota.json and render ───────────────────────────────────────────────
-python3 - <<PYEOF
-import json, os, datetime, math
+"$VENV_PYTHON" - <<PYEOF
+import json, os, datetime, base64, io
+from PIL import Image, ImageDraw
 
 quota_file  = os.path.expanduser("$QUOTA_FILE")
-config_file = os.path.expanduser("$CONFIG_FILE")
 
 with open(quota_file) as f:
     q = json.load(f)
-
-try:
-    cfg = json.load(open(config_file))
-except Exception:
-    cfg = {}
 
 entitlement   = q.get("entitlement", 0)
 used          = q.get("used", 0)
@@ -130,7 +88,6 @@ unlimited     = q.get("unlimited", False)
 pct_used      = q.get("percent_used", 0.0)
 reset_date_s  = q.get("quota_reset_date", "")
 fetched_at    = q.get("fetched_at", "")
-overlay_on    = cfg.get("overlay_enabled", False)
 
 # ── parse reset date ──────────────────────────────────────────────────────────
 try:
@@ -163,35 +120,43 @@ if unlimited:
     print("✅ Unlimited quota (enterprise plan)")
     print(f"Plan: {q.get('plan','unknown')}")
 else:
-    # ── two-tone progress bar ─────────────────────────────────────────────────
-    BAR_QUOTA_WIDTH = 20   # chars representing 100% of entitlement
-    OVERAGE_MAX_WIDTH = 10 # max chars for overage extension
+    # ── PNG progress bar ──────────────────────────────────────────────────────
+    W, H, R = 380, 14, 7
+    OVERAGE_MAX_PX = int(W * 0.20)
 
-    quota_fill    = min(int(round(min(pct_used, 100) / 100 * BAR_QUOTA_WIDTH)), BAR_QUOTA_WIDTH)
-    quota_empty   = BAR_QUOTA_WIDTH - quota_fill
+    quota_fill_px   = int(min(pct_used, 100) / 100 * W)
+    overage_pct     = (overage / entitlement * 100) if entitlement > 0 else 0
+    overage_fill_px = min(int(overage_pct / 100 * W), OVERAGE_MAX_PX)
+    total_w         = W + overage_fill_px
 
-    # overage segment: each char = 5% of entitlement (so 10 chars = +50% max display)
-    overage_pct   = overage / entitlement * 100 if entitlement > 0 else 0
-    overage_fill  = min(int(round(overage_pct / 5)), OVERAGE_MAX_WIDTH)
+    GREEN  = (48, 209, 88)
+    YELLOW = (255, 214, 10)
+    RED    = (255, 69, 58)
+    TRACK  = (60, 60, 65)
+    WHITE  = (255, 255, 255)
+    quota_color = GREEN if pct_used < 75 else YELLOW if pct_used < 100 else RED
 
-    # SwiftBar does not support ansi=true / per-character color.
-    # Render two stacked bar lines — green quota row then red overage row —
-    # each colored via SwiftBar's native | color= param.
-    quota_blocks   = "█" * quota_fill + "░" * quota_empty
-    overage_blocks = "█" * overage_fill + "░" * (OVERAGE_MAX_WIDTH - overage_fill) if overage > 0 else ""
+    img = Image.new("RGBA", (total_w, H), (0, 0, 0, 0))
+    d   = ImageDraw.Draw(img)
 
-    bar_color = "#30d158" if pct_used < 75 else "#ffd60a" if pct_used < 100 else "#ff453a"
+    # track (quota region only)
+    d.rounded_rectangle([0, 0, W - 1, H - 1], radius=R, fill=TRACK)
+    # quota fill
+    if quota_fill_px > 0:
+        d.rounded_rectangle([0, 0, quota_fill_px - 1, H - 1], radius=R, fill=quota_color)
+    # overage extension
+    if overage_fill_px > 0:
+        d.rectangle([W, 0, W + overage_fill_px - 1, H - 1], fill=RED)
+        d.rounded_rectangle([W + overage_fill_px - R * 2, 0,
+                              W + overage_fill_px - 1,     H - 1], radius=R, fill=RED)
+        # white boundary divider
+        d.rectangle([W - 2, 0, W + 1, H - 1], fill=WHITE)
 
-    # Quota bar row
-    quota_label = f"[{quota_blocks}] {min(pct_used,100):.0f}%"
-    print(f"{quota_label} | color={bar_color} font=Menlo size=12 trim=false")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
 
-    # Overage bar row (only shown when over)
-    if overage > 0:
-        boundary    = " " * BAR_QUOTA_WIDTH  # indent to align under quota bar
-        over_label  = f" {'█' * overage_fill} +{overage:,} over"
-        print(f"{over_label} | color=#ff453a font=Menlo size=11 trim=false")
-
+    print(f"| image={b64} trim=false")
     print("---")
 
     if overage > 0:
@@ -216,7 +181,4 @@ print(f"Updated {time_str} | color=#8e8e93 size=10")
 print("---")
 print(f"Refresh Now | bash='{os.path.expanduser('$0')}' param1=refresh terminal=false refresh=true")
 print(f"Open Copilot Settings | bash='{os.path.expanduser('$0')}' param1=open_settings terminal=false")
-
-overlay_label = "✅ Desktop Overlay (on)" if overlay_on else "Desktop Overlay (off)"
-print(f"{overlay_label} | bash='{os.path.expanduser('$0')}' param1=toggle_overlay terminal=false refresh=true")
 PYEOF

@@ -21,7 +21,6 @@ for arg in "$@"; do [[ "$arg" == "--update" ]] && UPDATE_MODE=true; done
 REPO_URL="https://github.com/adam-geipel/copilot-quota-widget"
 RAW_BASE="https://raw.githubusercontent.com/adam-geipel/copilot-quota-widget/main"
 WIDGET_DIR="$HOME/.config/copilot-quota-widget"
-UBERSICHT_DIR="$HOME/Library/Application Support/Übersicht/Widgets"
 
 # ── detect if running from curl (no local files) vs local repo ────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-/dev/stdin}")" 2>/dev/null && pwd || echo "")"
@@ -187,9 +186,8 @@ install_file() {
   info "  $src_name"
 }
 
-install_file "fetch_quota.sh"                                         "$WIDGET_DIR/fetch_quota.sh"
-install_file "copilot-quota.5m.sh"                                    "$WIDGET_DIR/copilot-quota.5m.sh"
-install_file "ubersicht/copilot-quota.widget/index.jsx"               "$WIDGET_DIR/ubersicht/copilot-quota.widget/index.jsx"
+install_file "fetch_quota.sh"          "$WIDGET_DIR/fetch_quota.sh"
+install_file "copilot-quota.5m.sh"     "$WIDGET_DIR/copilot-quota.5m.sh"
 
 chmod +x "$WIDGET_DIR/fetch_quota.sh"
 chmod +x "$WIDGET_DIR/copilot-quota.5m.sh"
@@ -201,38 +199,11 @@ if [[ ! -f "$WIDGET_DIR/config.json" ]]; then
 fi
 
 # ── symlink SwiftBar plugin ───────────────────────────────────────────────────
-section "4 / 5  Linking SwiftBar plugin"
+section "4 / 4  Linking SwiftBar plugin"
 PLUGIN_LINK="$SWIFTBAR_PLUGINS/copilot-quota.5m.sh"
 rm -f "$PLUGIN_LINK"
 ln -s "$WIDGET_DIR/copilot-quota.5m.sh" "$PLUGIN_LINK"
 info "Symlinked: $PLUGIN_LINK → $WIDGET_DIR/copilot-quota.5m.sh"
-
-# ── optional Übersicht overlay ────────────────────────────────────────────────
-section "5 / 5  Übersicht desktop overlay (optional)"
-UBERSICHT_PATH="$(find_app Übersicht.app)"
-INSTALL_UBERSICHT=false
-
-if [[ -n "$UBERSICHT_PATH" ]]; then
-  info "Übersicht already installed: $UBERSICHT_PATH"
-  INSTALL_UBERSICHT=true
-elif [[ "$UPDATE_MODE" == false ]]; then
-  read -r -p "  Install Übersicht for desktop overlay widget? [y/N] " yn
-  if [[ "$(echo "$yn" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
-    download_app "Übersicht.app" "https://tracesof.net/uebersicht/releases/latest/Uebersicht.zip"
-    INSTALL_UBERSICHT=true
-  else
-    info "Skipping Übersicht. Enable later from the SwiftBar menu if desired."
-  fi
-fi
-
-if [[ "$INSTALL_UBERSICHT" == true ]]; then
-  mkdir -p "$UBERSICHT_DIR"
-  WIDGET_LINK="$UBERSICHT_DIR/copilot-quota.widget"
-  rm -f "$WIDGET_LINK"
-  ln -s "$WIDGET_DIR/ubersicht/copilot-quota.widget" "$WIDGET_LINK"
-  info "Symlinked: $WIDGET_LINK"
-  info "Enable overlay from the SwiftBar ⬇ menu → 'Desktop Overlay (off)'"
-fi
 
 # ── initial fetch ─────────────────────────────────────────────────────────────
 echo ""
