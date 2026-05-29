@@ -1,12 +1,11 @@
 # 🤖 GitHub Copilot Quota Widget
 
-A macOS menu bar widget (+ optional desktop overlay) that mirrors the GitHub Copilot premium request progress bar from your account settings — visible at a glance, always up to date.
+A macOS menu bar widget that mirrors the GitHub Copilot premium request progress bar from your account settings — visible at a glance, always up to date.
 
 **Features:**
 - 🟢 / 🟡 / 🔴 color-coded menu bar icon based on usage level
-- Two-tone progress bar: green for quota consumed, red segment extending past the boundary for overage
+- Pixel-rendered pill progress bar: green/yellow/red for quota consumed, red overage segment extending past the boundary with a white divider
 - Resets date + days remaining
-- Optional floating desktop overlay (Übersicht)
 - Auto-refreshes every 5 minutes via SwiftBar
 
 ---
@@ -25,7 +24,7 @@ A macOS menu bar widget (+ optional desktop overlay) that mirrors the GitHub Cop
 
 **Dropdown:**
 ```
-[████████████████████|██████░░░░] 110%
+[████████████████████|██████] 110%   ← pixel-rendered pill bar
 ─────────────────────────────────────
 Used:  1,105 / 1,000  (+105 overage)
 Resets: 1 Jun  (3d)
@@ -33,10 +32,9 @@ Resets: 1 Jun  (3d)
 Updated 8:42 AM
 Refresh Now
 Open Copilot Settings
-Desktop Overlay (off)
 ```
 
-The `|` marker indicates the 100% quota boundary. Red blocks extend past it to show overage proportionally.
+The `|` marker indicates the 100% quota boundary. The red segment extends past it to show overage proportionally.
 
 ---
 
@@ -45,13 +43,14 @@ The `|` marker indicates the 100% quota boundary. Red blocks extend past it to s
 | Requirement | Notes |
 |---|---|
 | macOS | Apple Silicon or Intel |
-| [gh CLI](https://cli.github.com) | For authentication — `brew install gh` |
-| [SwiftBar](https://swiftbar.app) | Menu bar host — auto-installed |
-| [Übersicht](https://tracesof.net/uebersicht/) | Optional overlay — prompted during install |
+| [gh CLI](https://cli.github.com) | For authentication — `brew install gh` or download from releases |
+| [SwiftBar](https://swiftbar.app) | Menu bar host — auto-installed via direct download |
 | `python3` | Ships with macOS |
 | `curl` | Ships with macOS |
 
 > **Note:** Uses `gh auth token` to authenticate — no credentials stored in the repo or config files.
+
+> **Note:** SwiftBar is downloaded directly from GitHub releases (no Homebrew cask required). Works on MDM-managed machines.
 
 ---
 
@@ -71,11 +70,10 @@ cd copilot-quota-widget
 
 The installer will:
 1. Verify `gh` CLI is authenticated
-2. Install SwiftBar via Homebrew if needed
+2. Download SwiftBar directly to `~/Applications/` if not already installed
 3. Copy scripts to `~/.config/copilot-quota-widget/`
 4. Symlink the SwiftBar plugin
-5. Optionally install Übersicht for the desktop overlay
-6. Run an initial quota fetch
+5. Run an initial quota fetch
 
 ---
 
@@ -107,6 +105,8 @@ The quota data comes from `https://api.github.com/copilot_internal/user` — the
 
 This is fetched via your existing `gh` CLI session token — no extra OAuth scopes required.
 
+The progress bar is a PNG rendered on the fly via Pillow (installed into a local venv at `~/.config/copilot-quota-widget/.venv` on first run) and embedded as a base64 `image=` parameter in the SwiftBar menu item.
+
 > **Note on enterprise plans:** Enterprise seats often have `unlimited: true` for chat/completions but still have a `premium_interactions` entitlement (e.g. 1000/month). The widget handles both cases — unlimited quotas show `∞` rather than a progress bar.
 
 ---
@@ -115,13 +115,11 @@ This is fetched via your existing `gh` CLI session token — no extra OAuth scop
 
 ```
 ~/.config/copilot-quota-widget/
-├── fetch_quota.sh                     # fetches API → writes quota.json
-├── copilot-quota.5m.sh                # SwiftBar plugin (5-min auto-refresh)
-├── quota.json                         # cached quota data (auto-written)
-├── config.json                        # user prefs (overlay_enabled)
-└── ubersicht/
-    └── copilot-quota.widget/
-        └── index.jsx                  # Übersicht desktop overlay
+├── fetch_quota.sh          # fetches API → writes quota.json
+├── copilot-quota.5m.sh     # SwiftBar plugin (5-min auto-refresh)
+├── quota.json              # cached quota data (auto-written)
+├── quota_error.txt         # written on fetch failure, cleared on success
+└── .venv/                  # Python venv with Pillow (auto-created on first run)
 ```
 
 ---
@@ -135,11 +133,6 @@ This is fetched via your existing `gh` CLI session token — no extra OAuth scop
 **Data looks stale**
 - Click `Refresh Now` in the dropdown
 - Check `~/.config/copilot-quota-widget/quota_error.txt` for fetch errors
-
-**Desktop overlay not appearing**
-- Ensure Übersicht is running (check menu bar)
-- Enable from SwiftBar dropdown: `Desktop Overlay (off)` → click to toggle on
-- Übersicht may need a refresh: `Preferences → Refresh All Widgets`
 
 **`quota_snapshots` is missing**
 - This endpoint is `copilot_internal` — GitHub may change it without notice. Open an issue if the schema breaks.

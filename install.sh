@@ -192,12 +192,6 @@ install_file "copilot-quota.5m.sh"     "$WIDGET_DIR/copilot-quota.5m.sh"
 chmod +x "$WIDGET_DIR/fetch_quota.sh"
 chmod +x "$WIDGET_DIR/copilot-quota.5m.sh"
 
-# Write default config if not present
-if [[ ! -f "$WIDGET_DIR/config.json" ]]; then
-  echo '{"overlay_enabled": false}' > "$WIDGET_DIR/config.json"
-  info "  config.json (defaults)"
-fi
-
 # ── symlink SwiftBar plugin ───────────────────────────────────────────────────
 section "4 / 4  Linking SwiftBar plugin"
 PLUGIN_LINK="$SWIFTBAR_PLUGINS/copilot-quota.5m.sh"
@@ -242,9 +236,6 @@ echo -e "${GREEN}${BOLD}✓ Installation complete!${NC}"
 echo ""
 echo "  • 🤖 should appear in your menu bar within a few seconds"
 echo "  • Click the icon → 'Refresh Now' to force an immediate update"
-if [[ "$INSTALL_UBERSICHT" == true ]]; then
-  echo "  • Enable desktop overlay: click 🤖 → 'Desktop Overlay (off)'"
-fi
 echo ""
 echo "  Update later:"
 echo "    cd $WIDGET_DIR && curl -fsSL $RAW_BASE/install.sh | bash -s -- --update"
