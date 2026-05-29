@@ -79,7 +79,7 @@ chmod +x "$WIDGET_DIR/fetch_quota.sh" "$WIDGET_DIR/copilot-quota.5m.sh"
 progress "Setting up Python environment…"
 VENV="$WIDGET_DIR/.venv"
 if [[ ! -x "$VENV/bin/python3" ]]; then
-  python3 -m venv "$VENV" --system-site-packages
+  /usr/bin/python3 -m venv "$VENV" --system-site-packages
 fi
 if ! "$VENV/bin/python3" -c "from PIL import Image" &>/dev/null; then
   "$VENV/bin/python3" -m pip install --quiet pillow --disable-pip-version-check

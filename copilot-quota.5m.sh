@@ -49,7 +49,7 @@ fi
 VENV_DIR="$WIDGET_DIR/.venv"
 VENV_PYTHON="$VENV_DIR/bin/python3"
 if [[ ! -x "$VENV_PYTHON" ]]; then
-  python3 -m venv "$VENV_DIR" --system-site-packages
+  /usr/bin/python3 -m venv "$VENV_DIR" --system-site-packages
 fi
 if ! "$VENV_PYTHON" -c "from PIL import Image" &>/dev/null; then
   "$VENV_PYTHON" -m pip install --quiet pillow --disable-pip-version-check
