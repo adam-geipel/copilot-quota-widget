@@ -2,3 +2,8 @@
 quota.json
 quota_error.txt
 config.json
+
+# Packaging — bundled binaries and built artifacts (assembled by build-dmg.sh)
+packaging/CopilotQuotaWidget.app/Contents/Resources/SwiftBar.app
+packaging/CopilotQuotaWidget.app/Contents/Resources/gh
+packaging/dist/

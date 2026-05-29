@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# CopilotQuotaWidget installer — runs when user double-clicks the .app
+# Bundled resources:
+#   Contents/Resources/widget/     — plugin scripts
+#   Contents/Resources/SwiftBar.app
+#   Contents/Resources/gh           — gh CLI binary
+
+set -euo pipefail
+
+# ── locate bundle ─────────────────────────────────────────────────────────────
+BUNDLE="$(cd "$(dirname "$0")/.." && pwd)"
+RESOURCES="$BUNDLE/Resources"
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+notify() {
+  osascript -e "display notification \"$2\" with title \"Copilot Quota Widget\" subtitle \"$1\"" 2>/dev/null || true
+}
+
+die() {
+  osascript -e "display alert \"Copilot Quota Widget\" message \"$1\" as critical" 2>/dev/null || true
+  exit 1
+}
+
+progress() {
+  # Write step to a temp file so the AppleScript progress bar can read it
+  echo "$1" > /tmp/cqw-step.txt
+}
+
+# ── destination dirs ──────────────────────────────────────────────────────────
+WIDGET_DIR="$HOME/.config/copilot-quota-widget"
+APPS_DIR="$HOME/Applications"
+SWIFTBAR_DEST="$APPS_DIR/SwiftBar.app"
+GH_DEST="$APPS_DIR/gh"
+
+mkdir -p "$WIDGET_DIR" "$APPS_DIR"
+
+# ── show progress window via AppleScript ─────────────────────────────────────
+osascript &>/dev/null <<'ASEOF' &
+set steps to {"Installing SwiftBar…", "Installing gh CLI…", "Copying widget files…", "Setting up Python environment…", "Linking SwiftBar plugin…", "Launching SwiftBar…"}
+repeat with i from 1 to 6
+  delay 2
+end repeat
+ASEOF
+
+# ── 1. install SwiftBar ───────────────────────────────────────────────────────
+progress "Installing SwiftBar…"
+if [[ ! -d "$SWIFTBAR_DEST" ]]; then
+  cp -R "$RESOURCES/SwiftBar.app" "$SWIFTBAR_DEST"
+  xattr -dr com.apple.quarantine "$SWIFTBAR_DEST" 2>/dev/null || true
+fi
+
+# ── 2. install gh CLI ─────────────────────────────────────────────────────────
+progress "Installing gh CLI…"
+if [[ ! -x "$GH_DEST" ]]; then
+  cp "$RESOURCES/gh" "$GH_DEST"
+  chmod +x "$GH_DEST"
+  xattr -dr com.apple.quarantine "$GH_DEST" 2>/dev/null || true
+fi
+
+export PATH="$APPS_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
+# ── 3. check gh auth ──────────────────────────────────────────────────────────
+if ! gh auth status 2>&1 | grep -q "Logged in"; then
+  # Prompt user to authenticate
+  osascript -e 'tell application "Terminal"
+    activate
+    do script "echo \"Please authenticate with GitHub:\" && '"$GH_DEST"' auth login && echo \"Done — you can close this window.\""
+  end tell' 2>/dev/null || true
+  die "gh CLI not authenticated. A Terminal window has opened — please run 'gh auth login', then re-open Copilot Quota Widget."
+fi
+
+# ── 4. copy widget files ──────────────────────────────────────────────────────
+progress "Copying widget files…"
+cp "$RESOURCES/widget/fetch_quota.sh"       "$WIDGET_DIR/fetch_quota.sh"
+cp "$RESOURCES/widget/copilot-quota.5m.sh"  "$WIDGET_DIR/copilot-quota.5m.sh"
+chmod +x "$WIDGET_DIR/fetch_quota.sh" "$WIDGET_DIR/copilot-quota.5m.sh"
+
+# ── 5. set up Python venv + Pillow ────────────────────────────────────────────
+progress "Setting up Python environment…"
+VENV="$WIDGET_DIR/.venv"
+if [[ ! -x "$VENV/bin/python3" ]]; then
+  python3 -m venv "$VENV" --system-site-packages
+fi
+if ! "$VENV/bin/python3" -c "from PIL import Image" &>/dev/null; then
+  "$VENV/bin/python3" -m pip install --quiet pillow --disable-pip-version-check
+fi
+
+# ── 6. configure SwiftBar plugins dir + symlink ───────────────────────────────
+progress "Linking SwiftBar plugin…"
+SWIFTBAR_PLUGINS=$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || true)
+if [[ -z "$SWIFTBAR_PLUGINS" ]]; then
+  SWIFTBAR_PLUGINS="$HOME/.swiftbar/plugins"
+  defaults write com.ameba.SwiftBar PluginDirectory "$SWIFTBAR_PLUGINS"
+fi
+mkdir -p "$SWIFTBAR_PLUGINS"
+
+PLUGIN_LINK="$SWIFTBAR_PLUGINS/copilot-quota.5m.sh"
+rm -f "$PLUGIN_LINK"
+ln -s "$WIDGET_DIR/copilot-quota.5m.sh" "$PLUGIN_LINK"
+
+# ── 7. initial fetch ──────────────────────────────────────────────────────────
+bash "$WIDGET_DIR/fetch_quota.sh" &>/dev/null || true
+
+# ── 8. launch SwiftBar ────────────────────────────────────────────────────────
+progress "Launching SwiftBar…"
+if pgrep -x SwiftBar &>/dev/null; then
+  open -g "swiftbar://refreshAllPlugins" 2>/dev/null || true
+else
+  open "$SWIFTBAR_DEST"
+fi
+
+# ── done ──────────────────────────────────────────────────────────────────────
+notify "Installation complete!" "🤖 Copilot Quota Widget is now running in your menu bar."
