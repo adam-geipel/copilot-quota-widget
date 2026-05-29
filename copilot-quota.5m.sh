@@ -139,18 +139,44 @@ else:
     img = Image.new("RGBA", (total_w, H), (0, 0, 0, 0))
     d   = ImageDraw.Draw(img)
 
-    # track (quota region only)
-    d.rounded_rectangle([0, 0, W - 1, H - 1], radius=R, fill=TRACK)
-    # quota fill
-    if quota_fill_px > 0:
-        d.rounded_rectangle([0, 0, quota_fill_px - 1, H - 1], radius=R, fill=quota_color)
-    # overage extension
+    def pill(draw, x0, y0, x1, y1, fill, r_tl=R, r_tr=R, r_bl=R, r_br=R):
+        """Rounded rectangle with per-corner radii."""
+        # fill body
+        draw.rectangle([x0, y0, x1, y1], fill=fill)
+        # top-left corner
+        if r_tl > 0:
+            draw.rectangle([x0, y0, x0 + r_tl, y0 + r_tl], fill=(0,0,0,0))
+            draw.pieslice([x0, y0, x0 + r_tl*2, y0 + r_tl*2], 180, 270, fill=fill)
+        # top-right corner
+        if r_tr > 0:
+            draw.rectangle([x1 - r_tr, y0, x1, y0 + r_tr], fill=(0,0,0,0))
+            draw.pieslice([x1 - r_tr*2, y0, x1, y0 + r_tr*2], 270, 360, fill=fill)
+        # bottom-left corner
+        if r_bl > 0:
+            draw.rectangle([x0, y1 - r_bl, x0 + r_bl, y1], fill=(0,0,0,0))
+            draw.pieslice([x0, y1 - r_bl*2, x0 + r_bl*2, y1], 90, 180, fill=fill)
+        # bottom-right corner
+        if r_br > 0:
+            draw.rectangle([x1 - r_br, y1 - r_br, x1, y1], fill=(0,0,0,0))
+            draw.pieslice([x1 - r_br*2, y1 - r_br*2, x1, y1], 0, 90, fill=fill)
+
     if overage_fill_px > 0:
-        d.rectangle([W, 0, W + overage_fill_px - 1, H - 1], fill=RED)
-        d.rounded_rectangle([W + overage_fill_px - R * 2, 0,
-                              W + overage_fill_px - 1,     H - 1], radius=R, fill=RED)
+        # track: flat right end (overage region continues it)
+        pill(d, 0, 0, W - 1, H - 1, TRACK, r_tl=R, r_tr=0, r_bl=R, r_br=0)
+        # overage track: flat left end, rounded right end
+        pill(d, W, 0, total_w - 1, H - 1, TRACK, r_tl=0, r_tr=R, r_bl=0, r_br=R)
+        # quota fill: flat right end
+        if quota_fill_px > 0:
+            pill(d, 0, 0, quota_fill_px - 1, H - 1, quota_color, r_tl=R, r_tr=0, r_bl=R, r_br=0)
+        # overage fill: flat left end, rounded right end
+        pill(d, W, 0, W + overage_fill_px - 1, H - 1, RED, r_tl=0, r_tr=R, r_bl=0, r_br=R)
         # white boundary divider
         d.rectangle([W - 2, 0, W + 1, H - 1], fill=WHITE)
+    else:
+        # no overage — normal pill track + fill
+        pill(d, 0, 0, W - 1, H - 1, TRACK)
+        if quota_fill_px > 0:
+            pill(d, 0, 0, quota_fill_px - 1, H - 1, quota_color)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
