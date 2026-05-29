@@ -12,6 +12,15 @@
 # <swiftbar.hideSwiftBar>true</swiftbar.hideSwiftBar>
 # <swiftbar.environment>[WIDGET_DIR=~/.config/copilot-quota-widget]</swiftbar.environment>
 
+# Resolve HOME robustly — SwiftBar may not set it
+if [[ -z "${HOME:-}" ]]; then
+  HOME=$(dscl . -read /Users/"$(whoami)" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+fi
+export HOME
+
+# SwiftBar runs with a stripped PATH — add common binary locations
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
 WIDGET_DIR="${WIDGET_DIR:-$HOME/.config/copilot-quota-widget}"
 QUOTA_FILE="$WIDGET_DIR/quota.json"
 ERROR_FILE="$WIDGET_DIR/quota_error.txt"
