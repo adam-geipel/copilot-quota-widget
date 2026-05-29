@@ -29,27 +29,58 @@ ERROR_FILE="$WIDGET_DIR/quota_error.txt"
 CONFIG_FILE="$WIDGET_DIR/config.json"
 FETCH_SCRIPT="$WIDGET_DIR/fetch_quota.sh"
 
-# ── actions passed as env vars from SwiftBar menu clicks ───────────────────────
-if [[ "${ACTION:-}" == "refresh" ]]; then
+# ── actions passed as positional args from SwiftBar menu clicks ($1) ──────────
+UBERSICHT_WIDGETS="$HOME/Library/Application Support/Übersicht/Widgets"
+UBERSICHT_WIDGET_LINK="$UBERSICHT_WIDGETS/copilot-quota.widget"
+UBERSICHT_WIDGET_SRC="$WIDGET_DIR/ubersicht/copilot-quota.widget"
+
+if [[ "${1:-}" == "refresh" ]]; then
   bash "$FETCH_SCRIPT"
   exit 0
 fi
 
-if [[ "${ACTION:-}" == "toggle_overlay" ]]; then
-  python3 - <<PYEOF
+if [[ "${1:-}" == "toggle_overlay" ]]; then
+  # Flip overlay_enabled in config.json
+  NEW_STATE=$(python3 - <<PYEOF
 import json, os
-cfg_path = os.path.expanduser("$CONFIG_FILE")
+cfg_path = "$CONFIG_FILE"
 try:
     cfg = json.load(open(cfg_path))
 except Exception:
     cfg = {}
-cfg["overlay_enabled"] = not cfg.get("overlay_enabled", False)
+enabled = not cfg.get("overlay_enabled", False)
+cfg["overlay_enabled"] = enabled
 json.dump(cfg, open(cfg_path, "w"), indent=2)
+print("true" if enabled else "false")
 PYEOF
+)
+
+  if [[ "$NEW_STATE" == "true" ]]; then
+    # Enable: ensure symlink exists, launch Übersicht if not running
+    mkdir -p "$UBERSICHT_WIDGETS"
+    if [[ ! -L "$UBERSICHT_WIDGET_LINK" ]]; then
+      ln -sf "$UBERSICHT_WIDGET_SRC" "$UBERSICHT_WIDGET_LINK"
+    fi
+    UBERSICHT_APP=$(find /Applications "$HOME/Applications" -maxdepth 1 -name "Übersicht.app" 2>/dev/null | head -1)
+    if [[ -n "$UBERSICHT_APP" ]]; then
+      if ! pgrep -x "Übersicht" &>/dev/null; then
+        open "$UBERSICHT_APP"
+      else
+        # Already running — tell it to reload the widget
+        osascript -e 'tell application "Übersicht" to reload widget id "copilot-quota-widget-index-jsx"' 2>/dev/null || true
+      fi
+    fi
+  else
+    # Disable: remove symlink, quit Übersicht
+    rm -f "$UBERSICHT_WIDGET_LINK"
+    if pgrep -x "Übersicht" &>/dev/null; then
+      osascript -e 'tell application "Übersicht" to quit' 2>/dev/null || true
+    fi
+  fi
   exit 0
 fi
 
-if [[ "${ACTION:-}" == "open_settings" ]]; then
+if [[ "${1:-}" == "open_settings" ]]; then
   open "https://github.com/settings/copilot"
   exit 0
 fi
