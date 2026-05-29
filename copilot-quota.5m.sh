@@ -10,7 +10,7 @@
 # <swiftbar.hideLastUpdated>false</swiftbar.hideLastUpdated>
 # <swiftbar.hideDisablePlugin>true</swiftbar.hideDisablePlugin>
 # <swiftbar.hideSwiftBar>true</swiftbar.hideSwiftBar>
-# <swiftbar.environment>[WIDGET_DIR=~/.config/copilot-quota-widget]</swiftbar.environment>
+# <swiftbar.environment>[]</swiftbar.environment>
 
 # Resolve HOME robustly — SwiftBar may not set it
 if [[ -z "${HOME:-}" ]]; then
@@ -22,6 +22,8 @@ export HOME
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 WIDGET_DIR="${WIDGET_DIR:-$HOME/.config/copilot-quota-widget}"
+# Force-expand any literal tilde that SwiftBar may have injected via environment metadata
+WIDGET_DIR="${WIDGET_DIR/#\~/$HOME}"
 QUOTA_FILE="$WIDGET_DIR/quota.json"
 ERROR_FILE="$WIDGET_DIR/quota_error.txt"
 CONFIG_FILE="$WIDGET_DIR/config.json"
