@@ -34,7 +34,7 @@ echo "Building ${APP_NAME}.dmg..."
 # ── build staging dir ─────────────────────────────────────────────────────────
 STAGING=$(mktemp -d)
 cp -R "$APP_SRC" "$STAGING/${APP_NAME}.app"
-ln -s "$HOME/Applications" "$STAGING/Applications"
+ln -s /Applications "$STAGING/Applications"
 
 # ── create DMG directly from staging folder (no intermediate writable image) ──
 hdiutil create \
