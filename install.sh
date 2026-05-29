@@ -42,21 +42,72 @@ if [[ "$(uname)" != "Darwin" ]]; then
   exit 1
 fi
 
-# ── brew check ────────────────────────────────────────────────────────────────
-if ! command -v brew &>/dev/null; then
-  error "Homebrew not found. Install it first:"
-  echo "    /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-  exit 1
-fi
+# ── brew check (optional — used only for cask installs) ──────────────────────
+HAS_BREW=false
+command -v brew &>/dev/null && HAS_BREW=true
+
+# ── helper: install a .app from a zip URL ────────────────────────────────────
+# Usage: download_app <AppName.app> <zip_url>
+# Installs to ~/Applications/ (no sudo, no MDM cask policy).
+# Falls back to /Applications/ if user opts in.
+download_app() {
+  local app_name="$1"
+  local zip_url="$2"
+  local tmp_zip
+  tmp_zip="$(mktemp /tmp/widget-install-XXXXXX.zip)"
+  local install_dir="$HOME/Applications"
+
+  mkdir -p "$install_dir"
+
+  warn "$app_name not found. Downloading directly (no brew cask)..."
+  if ! curl -fsSL --progress-bar -o "$tmp_zip" "$zip_url"; then
+    error "Download failed: $zip_url"
+    rm -f "$tmp_zip"
+    return 1
+  fi
+
+  # Unzip — suppress output, overwrite existing
+  unzip -qo "$tmp_zip" -d "$install_dir"
+  rm -f "$tmp_zip"
+
+  local app_path="$install_dir/$app_name"
+  if [[ ! -d "$app_path" ]]; then
+    # Some zips nest inside a subdirectory — find it
+    app_path="$(find "$install_dir" -maxdepth 2 -name "$app_name" -type d 2>/dev/null | head -1)"
+  fi
+
+  if [[ -z "$app_path" || ! -d "$app_path" ]]; then
+    error "Could not find $app_name after unzip."
+    return 1
+  fi
+
+  # Remove Gatekeeper quarantine flag — required or macOS blocks first launch
+  xattr -dr com.apple.quarantine "$app_path" 2>/dev/null || true
+
+  info "$app_name installed → $app_path"
+}
+
+# ── helper: find installed .app in /Applications or ~/Applications ────────────
+find_app() {
+  local app_name="$1"
+  if   [[ -d "/Applications/$app_name" ]];      then echo "/Applications/$app_name"
+  elif [[ -d "$HOME/Applications/$app_name" ]]; then echo "$HOME/Applications/$app_name"
+  else echo ""
+  fi
+}
 
 # ── gh CLI check ──────────────────────────────────────────────────────────────
 section "1 / 5  Checking gh CLI"
 if ! command -v gh &>/dev/null; then
-  if [[ "$UPDATE_MODE" == false ]]; then
-    warn "gh CLI not found. Installing..."
+  if [[ "$HAS_BREW" == true && "$UPDATE_MODE" == false ]]; then
+    warn "gh CLI not found. Installing via brew..."
     brew install gh
   else
-    error "gh CLI not found — run: brew install gh"
+    error "gh CLI not found."
+    echo ""
+    echo "    Install options:"
+    echo "      brew install gh"
+    echo "      or download from: https://github.com/cli/cli/releases/latest"
     exit 1
   fi
 fi
@@ -74,21 +125,33 @@ info "Authenticated as: $GH_USER"
 
 # ── install SwiftBar ──────────────────────────────────────────────────────────
 section "2 / 5  SwiftBar (menu bar host)"
-if [[ -d "/Applications/SwiftBar.app" ]]; then
-  info "SwiftBar already installed"
-else
-  if [[ "$UPDATE_MODE" == false ]]; then
-    warn "SwiftBar not found. Installing via brew..."
-    brew install --cask swiftbar
-    info "SwiftBar installed"
-  else
-    warn "SwiftBar not found — install with: brew install --cask swiftbar"
+SWIFTBAR_PATH="$(find_app SwiftBar.app)"
+
+if [[ -n "$SWIFTBAR_PATH" ]]; then
+  info "SwiftBar already installed: $SWIFTBAR_PATH"
+elif [[ "$UPDATE_MODE" == false ]]; then
+  # Try brew cask first; fall back to direct download if MDM policy blocks it
+  SWIFTBAR_INSTALLED=false
+  if [[ "$HAS_BREW" == true ]]; then
+    warn "Attempting brew install --cask swiftbar..."
+    if brew install --cask swiftbar 2>/dev/null; then
+      SWIFTBAR_INSTALLED=true
+      info "SwiftBar installed via brew"
+    else
+      warn "brew cask blocked (MDM policy). Falling back to direct download..."
+    fi
   fi
+
+  if [[ "$SWIFTBAR_INSTALLED" == false ]]; then
+    download_app "SwiftBar.app" "https://github.com/swiftbar/SwiftBar/releases/latest/download/SwiftBar.zip"
+  fi
+else
+  warn "SwiftBar not found — install with: brew install --cask swiftbar"
+  warn "  or download from: https://github.com/swiftbar/SwiftBar/releases/latest"
 fi
 
 # ── detect SwiftBar plugins directory ─────────────────────────────────────────
 SWIFTBAR_PLUGINS=""
-# Check SwiftBar's stored preference for plugin directory
 SWIFTBAR_PLIST="$HOME/Library/Preferences/com.ameba.SwiftBar.plist"
 if [[ -f "$SWIFTBAR_PLIST" ]]; then
   SWIFTBAR_PLUGINS=$(defaults read com.ameba.SwiftBar PluginsDirectory 2>/dev/null || true)
@@ -135,22 +198,36 @@ fi
 # ── symlink SwiftBar plugin ───────────────────────────────────────────────────
 section "4 / 5  Linking SwiftBar plugin"
 PLUGIN_LINK="$SWIFTBAR_PLUGINS/copilot-quota.5m.sh"
-# Remove stale link or file
 rm -f "$PLUGIN_LINK"
 ln -s "$WIDGET_DIR/copilot-quota.5m.sh" "$PLUGIN_LINK"
 info "Symlinked: $PLUGIN_LINK → $WIDGET_DIR/copilot-quota.5m.sh"
 
 # ── optional Übersicht overlay ────────────────────────────────────────────────
 section "5 / 5  Übersicht desktop overlay (optional)"
+UBERSICHT_PATH="$(find_app Übersicht.app)"
 INSTALL_UBERSICHT=false
 
-if [[ -d "/Applications/Übersicht.app" ]]; then
-  info "Übersicht already installed"
+if [[ -n "$UBERSICHT_PATH" ]]; then
+  info "Übersicht already installed: $UBERSICHT_PATH"
   INSTALL_UBERSICHT=true
 elif [[ "$UPDATE_MODE" == false ]]; then
   read -r -p "  Install Übersicht for desktop overlay widget? [y/N] " yn
   if [[ "${yn,,}" == "y" ]]; then
-    brew install --cask ubersicht
+    UBERSICHT_INSTALLED=false
+    if [[ "$HAS_BREW" == true ]]; then
+      warn "Attempting brew install --cask ubersicht..."
+      if brew install --cask ubersicht 2>/dev/null; then
+        UBERSICHT_INSTALLED=true
+        info "Übersicht installed via brew"
+      else
+        warn "brew cask blocked (MDM policy). Falling back to direct download..."
+      fi
+    fi
+
+    if [[ "$UBERSICHT_INSTALLED" == false ]]; then
+      download_app "Übersicht.app" "https://tracesof.net/uebersicht/releases/latest/Uebersicht.zip"
+    fi
+
     INSTALL_UBERSICHT=true
   else
     info "Skipping Übersicht. Enable later from the SwiftBar menu if desired."
@@ -170,22 +247,44 @@ fi
 echo ""
 echo -e "${BOLD}Fetching quota data...${NC}"
 if bash "$WIDGET_DIR/fetch_quota.sh"; then
-  QUOTA_PCT=$(python3 -c "import json; d=json.load(open('$WIDGET_DIR/quota.json')); print(f\"{d['percent_used']:.0f}%  ({d['used']:,} / {d['entitlement']:,})\")" 2>/dev/null || echo "see $WIDGET_DIR/quota.json")
+  QUOTA_PCT=$(python3 -c "
+import json
+d = json.load(open('$WIDGET_DIR/quota.json'))
+used, ent = d['used'], d['entitlement']
+pct = d['percent_used']
+overage = d['overage_count']
+overage_str = f'  +{overage:,} overage' if overage > 0 else ''
+print(f\"{pct:.0f}%  ({used:,} / {ent:,}){overage_str}\")
+" 2>/dev/null || echo "see $WIDGET_DIR/quota.json")
   info "Quota fetched: $QUOTA_PCT"
 else
   warn "Initial fetch failed — plugin will retry automatically every 5 min"
+fi
+
+# ── open SwiftBar if it isn't running ─────────────────────────────────────────
+SWIFTBAR_PATH="$(find_app SwiftBar.app)"
+if [[ -n "$SWIFTBAR_PATH" ]]; then
+  if ! pgrep -x SwiftBar &>/dev/null; then
+    info "Launching SwiftBar..."
+    open "$SWIFTBAR_PATH"
+  else
+    # Tell running SwiftBar to reload plugins
+    open -g "swiftbar://refreshAllPlugins" 2>/dev/null || true
+    info "SwiftBar refreshed"
+  fi
 fi
 
 # ── done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}${BOLD}✓ Installation complete!${NC}"
 echo ""
-echo "  • Open SwiftBar (or restart it) to see 🤖 in your menu bar"
+echo "  • 🤖 should appear in your menu bar within a few seconds"
 echo "  • Click the icon → 'Refresh Now' to force an immediate update"
 if [[ "$INSTALL_UBERSICHT" == true ]]; then
   echo "  • Enable desktop overlay: click 🤖 → 'Desktop Overlay (off)'"
 fi
 echo ""
-echo "  Update later:  cd \$(dirname \$(readlink \"$PLUGIN_LINK\")) && git pull && ./install.sh --update"
-echo "  Repo:          $REPO_URL"
+echo "  Update later:"
+echo "    cd $WIDGET_DIR && curl -fsSL $RAW_BASE/install.sh | bash -s -- --update"
+echo "  Repo: $REPO_URL"
 echo ""
