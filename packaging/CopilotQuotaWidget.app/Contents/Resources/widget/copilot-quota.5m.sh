@@ -6,7 +6,7 @@
 # <bitbar.desc>Shows GitHub Copilot premium request quota with overage indicator</bitbar.desc>
 # <bitbar.dependencies>gh,python3,curl</bitbar.dependencies>
 # <swiftbar.hideAbout>true</swiftbar.hideAbout>
-# <swiftbar.hideRunInTerminal>false</swiftbar.hideRunInTerminal>
+# <swiftbar.hideRunInTerminal>true</swiftbar.hideRunInTerminal>
 # <swiftbar.hideLastUpdated>false</swiftbar.hideLastUpdated>
 # <swiftbar.hideDisablePlugin>true</swiftbar.hideDisablePlugin>
 # <swiftbar.hideSwiftBar>true</swiftbar.hideSwiftBar>
