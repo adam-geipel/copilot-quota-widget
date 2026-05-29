@@ -42,7 +42,7 @@ if [[ "$(uname)" != "Darwin" ]]; then
   exit 1
 fi
 
-# ── brew check (optional — used only for cask installs) ──────────────────────
+# ── brew check (optional — used only for gh CLI formula install) ─────────────
 HAS_BREW=false
 command -v brew &>/dev/null && HAS_BREW=true
 
@@ -131,24 +131,9 @@ SWIFTBAR_PATH="$(find_app SwiftBar.app)"
 if [[ -n "$SWIFTBAR_PATH" ]]; then
   info "SwiftBar already installed: $SWIFTBAR_PATH"
 elif [[ "$UPDATE_MODE" == false ]]; then
-  # Try brew cask first; fall back to direct download if MDM policy blocks it
-  SWIFTBAR_INSTALLED=false
-  if [[ "$HAS_BREW" == true ]]; then
-    warn "Attempting brew install --cask swiftbar..."
-    if brew install --cask swiftbar 2>/dev/null; then
-      SWIFTBAR_INSTALLED=true
-      info "SwiftBar installed via brew"
-    else
-      warn "brew cask blocked (MDM policy). Falling back to direct download..."
-    fi
-  fi
-
-  if [[ "$SWIFTBAR_INSTALLED" == false ]]; then
-    download_app "SwiftBar.app" "https://github.com/swiftbar/SwiftBar/releases/latest/download/SwiftBar.zip"
-  fi
+  download_app "SwiftBar.app" "https://github.com/swiftbar/SwiftBar/releases/latest/download/SwiftBar.zip"
 else
-  warn "SwiftBar not found — install with: brew install --cask swiftbar"
-  warn "  or download from: https://github.com/swiftbar/SwiftBar/releases/latest"
+  warn "SwiftBar not found — download from: https://github.com/swiftbar/SwiftBar/releases/latest"
 fi
 
 # ── configure SwiftBar plugins directory ─────────────────────────────────────
@@ -232,22 +217,8 @@ if [[ -n "$UBERSICHT_PATH" ]]; then
   INSTALL_UBERSICHT=true
 elif [[ "$UPDATE_MODE" == false ]]; then
   read -r -p "  Install Übersicht for desktop overlay widget? [y/N] " yn
-    if [[ "$(echo "$yn" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
-    UBERSICHT_INSTALLED=false
-    if [[ "$HAS_BREW" == true ]]; then
-      warn "Attempting brew install --cask ubersicht..."
-      if brew install --cask ubersicht 2>/dev/null; then
-        UBERSICHT_INSTALLED=true
-        info "Übersicht installed via brew"
-      else
-        warn "brew cask blocked (MDM policy). Falling back to direct download..."
-      fi
-    fi
-
-    if [[ "$UBERSICHT_INSTALLED" == false ]]; then
-      download_app "Übersicht.app" "https://tracesof.net/uebersicht/releases/latest/Uebersicht.zip"
-    fi
-
+  if [[ "$(echo "$yn" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
+    download_app "Übersicht.app" "https://tracesof.net/uebersicht/releases/latest/Uebersicht.zip"
     INSTALL_UBERSICHT=true
   else
     info "Skipping Übersicht. Enable later from the SwiftBar menu if desired."
