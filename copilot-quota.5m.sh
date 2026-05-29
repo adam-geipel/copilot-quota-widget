@@ -143,20 +143,24 @@ else:
     overage_pct   = overage / entitlement * 100 if entitlement > 0 else 0
     overage_fill  = min(int(round(overage_pct / 5)), OVERAGE_MAX_WIDTH)
 
-    GREEN  = "\033[32m"
-    RED    = "\033[31m"
-    YELLOW = "\033[33m"
-    DIM    = "\033[2m"
-    RESET  = "\033[0m"
+    # SwiftBar does not support ansi=true / per-character color.
+    # Render two stacked bar lines — green quota row then red overage row —
+    # each colored via SwiftBar's native | color= param.
+    quota_blocks   = "█" * quota_fill + "░" * quota_empty
+    overage_blocks = "█" * overage_fill + "░" * (OVERAGE_MAX_WIDTH - overage_fill) if overage > 0 else ""
 
-    quota_bar   = GREEN  + ("█" * quota_fill)  + RESET
-    empty_part  = DIM   + ("░" * quota_empty) + RESET
-    overage_bar = RED   + ("█" * overage_fill) + RESET if overage_fill > 0 else ""
-    separator   = (RED + "|" + RESET) if overage > 0 else ""
+    bar_color = "#30d158" if pct_used < 75 else "#ffd60a" if pct_used < 100 else "#ff453a"
 
-    bar_line = f"[{quota_bar}{empty_part}{separator}{overage_bar}] {pct_used:.0f}%"
+    # Quota bar row
+    quota_label = f"[{quota_blocks}] {min(pct_used,100):.0f}%"
+    print(f"{quota_label} | color={bar_color} font=Menlo size=12 trim=false")
 
-    print(f"{bar_line} | ansi=true font=Menlo size=12 trim=false")
+    # Overage bar row (only shown when over)
+    if overage > 0:
+        boundary    = " " * BAR_QUOTA_WIDTH  # indent to align under quota bar
+        over_label  = f" {'█' * overage_fill} +{overage:,} over"
+        print(f"{over_label} | color=#ff453a font=Menlo size=11 trim=false")
+
     print("---")
 
     if overage > 0:
