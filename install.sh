@@ -113,7 +113,8 @@ if ! command -v gh &>/dev/null; then
 fi
 info "gh CLI found: $(gh --version | head -1)"
 
-if ! gh auth status &>/dev/null; then
+GH_AUTH_OUT=$(gh auth status 2>&1 || true)
+if ! echo "$GH_AUTH_OUT" | grep -q "Logged in"; then
   error "gh CLI not authenticated."
   echo ""
   echo "    Run:  gh auth login"
@@ -212,7 +213,7 @@ if [[ -n "$UBERSICHT_PATH" ]]; then
   INSTALL_UBERSICHT=true
 elif [[ "$UPDATE_MODE" == false ]]; then
   read -r -p "  Install Übersicht for desktop overlay widget? [y/N] " yn
-  if [[ "${yn,,}" == "y" ]]; then
+    if [[ "$(echo "$yn" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
     UBERSICHT_INSTALLED=false
     if [[ "$HAS_BREW" == true ]]; then
       warn "Attempting brew install --cask ubersicht..."
