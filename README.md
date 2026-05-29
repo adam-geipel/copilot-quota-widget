@@ -22,7 +22,11 @@ A macOS menu bar widget that mirrors the GitHub Copilot premium request progress
 🤖 110% ↑
 ```
 
-**Dropdown:**
+**Progress bar scenarios:**
+
+![Bar scenarios](docs/bar-scenarios.png)
+
+**Full dropdown:**
 ```
 [████████████████████|██████] 110%   ← pixel-rendered pill bar
 ─────────────────────────────────────
