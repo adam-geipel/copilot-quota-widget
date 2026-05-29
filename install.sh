@@ -153,7 +153,7 @@ fi
 
 # ── configure SwiftBar plugins directory ─────────────────────────────────────
 # Read existing pref first — may already be set if SwiftBar was previously used
-SWIFTBAR_PLUGINS=$(defaults read com.ameba.SwiftBar pluginDirectoryPath 2>/dev/null || true)
+SWIFTBAR_PLUGINS=$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || true)
 
 if [[ -z "$SWIFTBAR_PLUGINS" ]]; then
   DEFAULT_PLUGINS="$HOME/.swiftbar/plugins"
@@ -174,7 +174,7 @@ if [[ -z "$SWIFTBAR_PLUGINS" ]]; then
   fi
 
   # Write pref before launching SwiftBar so it never shows the GUI dialog
-  defaults write com.ameba.SwiftBar pluginDirectoryPath "$SWIFTBAR_PLUGINS"
+  defaults write com.ameba.SwiftBar PluginDirectory "$SWIFTBAR_PLUGINS"
   info "SwiftBar plugins dir set: $SWIFTBAR_PLUGINS"
 else
   info "SwiftBar plugins dir (existing): $SWIFTBAR_PLUGINS"
