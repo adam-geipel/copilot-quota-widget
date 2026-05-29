@@ -121,7 +121,7 @@ if unlimited:
     print(f"Plan: {q.get('plan','unknown')}")
 else:
     # ── PNG progress bar ──────────────────────────────────────────────────────
-    W, H, R = 380, 14, 7
+    W, H, R = 240, 14, 7
     OVERAGE_MAX_PX = int(W * 0.20)
 
     quota_fill_px   = int(min(pct_used, 100) / 100 * W)
