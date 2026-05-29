@@ -87,27 +87,35 @@ fi
 
 # ── 6. configure SwiftBar plugins dir + symlink ───────────────────────────────
 progress "Linking SwiftBar plugin…"
-SWIFTBAR_PLUGINS=$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || true)
-if [[ -z "$SWIFTBAR_PLUGINS" ]]; then
-  SWIFTBAR_PLUGINS="$HOME/.swiftbar/plugins"
-  defaults write com.ameba.SwiftBar PluginDirectory "$SWIFTBAR_PLUGINS"
-fi
+SWIFTBAR_PLUGINS="$HOME/.swiftbar/plugins"
 mkdir -p "$SWIFTBAR_PLUGINS"
 
 PLUGIN_LINK="$SWIFTBAR_PLUGINS/copilot-quota.5m.sh"
 rm -f "$PLUGIN_LINK"
 ln -s "$WIDGET_DIR/copilot-quota.5m.sh" "$PLUGIN_LINK"
 
+# Write plugin dir pref — must happen before SwiftBar launches
+defaults write com.ameba.SwiftBar PluginDirectory "$SWIFTBAR_PLUGINS"
+
 # ── 7. initial fetch ──────────────────────────────────────────────────────────
 bash "$WIDGET_DIR/fetch_quota.sh" &>/dev/null || true
 
 # ── 8. launch SwiftBar ────────────────────────────────────────────────────────
 progress "Launching SwiftBar…"
+
+# Kill any running SwiftBar so it re-reads prefs and plugin dir on fresh launch
 if pgrep -x SwiftBar &>/dev/null; then
-  open -g "swiftbar://refreshAllPlugins" 2>/dev/null || true
-else
-  open "$SWIFTBAR_DEST"
+  pkill -x SwiftBar 2>/dev/null || true
+  sleep 2
 fi
 
+open "$SWIFTBAR_DEST"
+
+# Wait for SwiftBar to fully initialize before sending refresh
+sleep 4
+open -g "swiftbar://refreshAllPlugins" 2>/dev/null || true
+
 # ── done ──────────────────────────────────────────────────────────────────────
-notify "Installation complete!" "🤖 Copilot Quota Widget is now running in your menu bar."
+# Short additional wait so widget appears before toast fires
+sleep 2
+notify "Installation complete!" "Copilot Quota Widget is now running in your menu bar."
