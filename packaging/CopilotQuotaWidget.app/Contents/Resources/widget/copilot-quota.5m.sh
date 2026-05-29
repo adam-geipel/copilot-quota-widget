@@ -40,6 +40,11 @@ if [[ "${1:-}" == "open_settings" ]]; then
   exit 0
 fi
 
+if [[ "${1:-}" == "quit_swiftbar" ]]; then
+  osascript -e 'tell application "SwiftBar" to quit' 2>/dev/null || pkill -x SwiftBar
+  exit 0
+fi
+
 # ── ensure Python venv with Pillow exists ─────────────────────────────────────
 VENV_DIR="$WIDGET_DIR/.venv"
 VENV_PYTHON="$VENV_DIR/bin/python3"
@@ -207,4 +212,6 @@ print(f"Updated {time_str} | color=#8e8e93 size=10")
 print("---")
 print(f"Refresh Now | bash='{os.path.expanduser('$0')}' param1=refresh terminal=false refresh=true")
 print(f"Open Copilot Settings | bash='{os.path.expanduser('$0')}' param1=open_settings terminal=false")
+print("---")
+print(f"Quit SwiftBar | bash='{os.path.expanduser('$0')}' param1=quit_swiftbar terminal=false")
 PYEOF
